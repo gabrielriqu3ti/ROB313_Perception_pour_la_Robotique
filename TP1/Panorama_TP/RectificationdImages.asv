@@ -1,0 +1,14 @@
+%%% Script - Rectification d'Images
+% Question 1 du TP-1
+% Autheurs : Gabriel H. Riqueti et 
+% Orientateurs : Antoine Manzanera et David Filliat
+
+imrgb = double(imread('Pompei.jpg'))/255;
+imagesc(imrgb);
+
+PtO = [[143;43;1],[111;256;1],[356;43;1],[371;260;1]];
+PtD = [[143;43;1],[143;256;1],[356;43;1],[356;256;1]];
+
+H = homography2d(PtO,PtD);
+imagesc(vgg_warp_H(imrgb,H));
+imwrite(vgg_warp_H(imrgb,H),'Pompei_Carre.JPG');
