@@ -6,8 +6,8 @@ close;
 clc;
 
 % Réglages
-nImgs = 2; % nombre des images assemblées : 2 ou 3
-nPts  = 1;  % nombre de points considérés pour exécuter l'hommographie
+nImgs = 3; % nombre des images assemblées : 2 ou 3
+nPts  = 4;  % nombre de points considérés pour exécuter l'hommographie
 
 % Chargement de l'image
 ima = double(imread('Amst-1.jpg'))/255;

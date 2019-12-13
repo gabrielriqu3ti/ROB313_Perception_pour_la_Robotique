@@ -54,7 +54,7 @@ function H = homography2d(varargin)
     end
     
     % TODO : perform SVD
-    [U,S,V] = svd(A);
+    [~,~,V] = svd(A);
     
     
     % TODO : Extract homography from SVD result
