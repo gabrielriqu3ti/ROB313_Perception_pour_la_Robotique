@@ -106,30 +106,31 @@ def drawFundamental(img1,img2,pts1,pts2,F):
     plt.subplot(121),plt.imshow(img5)
     plt.subplot(122),plt.imshow(img3)
 
-
-
 ###### Compute Fundamental Matrix using OpenCV RANSAC
 FRansac, mask = cv2.findFundamentalMat(pts1,pts2,cv2.FM_RANSAC)
 print('Number of RANSAC inliers : ' + str(mask.sum()))
+print(f"FRansac : ")
+print(FRansac)
 
 # select inlier points
 inlierpts1 = pts1[mask.ravel()==1]
 inlierpts2 = pts2[mask.ravel()==1]
 
 def SampsonDist(pt1, pt2, F):
-    # Calculate the Simpson's distance of a pair of points (pt1, pt2) and a 
+    # Calculate the Simpson's distance of a pair of points (pt1, pt2) and a
     # Fundamental matrix F
-    Mpt1 = np.array([[inlierpt1[0], 0,0], [inlierpt1[1], 0,0], [1,0,0]])
-    Mpt2 = np.array([[inlierpt2[0], 0,0], [inlierpt2[1], 0,0], [1,0,0]])
-    num = np.transpose(Mpt1)  * FRansac * Mpt2
-    den1 = np.transpose(FRansac) * Mpt1
-    den2 = FRansac * Mpt2
+    Mpt1 = np.array([[pt1[0]], [pt1[1]], [1]])
+    Mpt2 = np.array([[pt2[0]], [pt2[1]], [1]])
+    num = np.dot(np.transpose(Mpt2), np.dot(F, Mpt1))
+    den1 = np.dot(np.transpose(F), Mpt2)
+    den2 = np.dot(F, Mpt1)
     SampDist = num[0,0]**2 / (den1[0,0]**2 + den1[1,0]**2 + den2[0,0]**2 + den2[1,0]**2)
     return SampDist
 
 mse = 0
 for inlierpt1, inlierpt2 in zip(inlierpts1, inlierpts2):
     mse += SampsonDist(inlierpt1, inlierpt2, FRansac)
+
 
 rmse = math.sqrt(mse / mask.sum())
 print(f"RMSE : {rmse}")
@@ -143,8 +144,8 @@ drawFundamental(img1,img2,inlierpts1,inlierpts2,FRansac)
 
 def NSamples(sampleSize, propOutliers):
     # Calculate the number of samples required to ensure, with probability 0.99,
-    # that at least one sample has no outliers for a given size of sample and 
-    # proportion of outliers in a RANSAC algorithm 
+    # that at least one sample has no outliers for a given size of sample and
+    # proportion of outliers in a RANSAC algorithm
     N_p0_99 = [[ 2, 3,  5,  6,  7,  11,   17],
                [ 3, 4,  7,  9, 11,  19,   35],
                [ 3, 5,  9, 13, 17,  34,   72],
@@ -170,15 +171,20 @@ def NSamples(sampleSize, propOutliers):
 
 # RANSAC paramenters
 N = 588 # Initial number of samples for p = 0.99 and proportion of outliers e = 0.5
-maxDistThreshold = 1 # maximum distance of the solution from inliers
+maxDistThreshold = 2.5 # maximum distance of the solution from inliers
 
 inliersPts1MaxN = []
 inliersPts2MaxN = []
+inliersPts1Max = []
+inliersPts2Max = []
 NinMaxN = 0
 mseMin = 0
-FRANSAC = [[0,0,0],[0,0,0],[0,0,0]]
+FRANSAC = np.array([[0,0,0],[0,0,0],[0,0,0]])
 
 i = 0
+propOutliers = 0.5
+print("RANSAC algorithm begins...")
+print("...")
 while N > i:
     # Compute Fundamental Matrix F with 7-points
 
@@ -187,9 +193,7 @@ while N > i:
     samplePt1 = pts1[indexes,:]
     samplePt2 = pts2[indexes,:]
 
-    F7point, _ = cv2.findFundamentalMat(samplePt1,samplePt2,cv2.FM_7POINT)
-
-    print(f"F7-point : {F7point}")
+    F7point, _ = cv2.findFundamentalMat(samplePt1, samplePt2, cv2.FM_7POINT)
 
     NInliers = list(range(len(F7point)//3))
     NinMax = 0
@@ -199,18 +203,18 @@ while N > i:
         inliersPts1 = []
         inliersPts2 = []
         for pt1, pt2 in zip(pts1, pts2):
-            if SampsonDist(pt1, pt2, F7point[3*j:3*(j+1),:]) < maxDistThreshold:
+            dist = SampsonDist(pt1, pt2, F7point[3*j:3*(j+1),:])
+#            print(f"dist : {dist}")
+            if dist < maxDistThreshold:
                 inliersPts1.append(pt1)
                 inliersPts2.append(pt2)
         NInliers[j] = len(inliersPts1)
+#        print(f"NInliers[{j+1}] : {NInliers[j]}")
         if NInliers[j] > NinMax:
             inliersPts1Max = inliersPts1
             inliersPts2Max = inliersPts2
             NinMax = NInliers[j]
             F_id = j
-
-    inliersPts1Max = np.array(inliersPts1Max)
-    inliersPts2Max = np.array(inliersPts2Max)
 
     # Update Fundamental matrix F, maximum number of inliers and inliers
     if NinMax > NinMaxN:
@@ -218,18 +222,47 @@ while N > i:
         inliersPts1MaxN = inliersPts1Max
         inliersPts2MaxN = inliersPts2Max
         FRANSAC = F7point[3*F_id:3*(F_id+1),:]
-        
+#        print(f"FRansac 7-Point : ")
+#        print(FRansac)
+        print(f"N = {N}")
+        print(f"i = {i}")
+        print(f"e = {propOutliers}")
+        print("...")
+
     # Adapt the number of samples N
     propOutliers = 1 - (NinMaxN)/(pts1.shape[0])
     N = NSamples(7, propOutliers)
     i += 1
+print("RANSAC algorithm finishs...")
 
-    print(f"N = {N}")
-    print(f"i = {i}")
-    print(f"e = {propOutliers}")
+inliersPts1MaxN = np.array(inliersPts1MaxN)
+inliersPts2MaxN = np.array(inliersPts2MaxN)
 
+print(f"FRansac 7-Point optimized with RANSAC : ")
+print(FRANSAC)
+
+mse = 0
+for inlierpt1, inlierpt2 in zip(inliersPts1MaxN, inliersPts2MaxN):
+    mse += SampsonDist(inlierpt1, inlierpt2, FRANSAC)
+rmse = math.sqrt(mse / mask.sum())
+print(f"RMSE : {rmse}")
 
 drawFundamental(img1, img2, inliersPts1MaxN, inliersPts2MaxN, FRANSAC)
+
+FRANSAC_LM, mask = cv2.findFundamentalMat(inliersPts1MaxN, inliersPts2MaxN, cv2.FM_LMEDS)
+
+print(f"FRansac Levenberg-Marquardt : ")
+print(FRANSAC_LM)
+print(f"Number of handmade RANSAC inliers : {NinMaxN}")
+
+
+mse = 0
+for inlierpt1, inlierpt2 in zip(inliersPts1MaxN, inliersPts2MaxN):
+    mse += SampsonDist(inlierpt1, inlierpt2, FRANSAC_LM)
+rmse = math.sqrt(mse / mask.sum())
+print(f"RMSE : {rmse}")
+
+drawFundamental(img1, img2, inliersPts1MaxN, inliersPts2MaxN, FRANSAC_LM)
 
 
 #drawFundamental(img1,img2,inliersPt1,inliersPt2,bestF)
