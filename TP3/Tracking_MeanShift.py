@@ -20,7 +20,7 @@ def define_ROI(event, x, y, flags, param):
 		c = min(c,c2)
 		roi_defined = True
 
-cap = cv2.VideoCapture('../Sequences/Antoine_Mug.mp4')
+cap = cv2.VideoCapture('Test-Videos/Antoine_Mug.mp4')
 
 # take first frame of the video
 ret,frame = cap.read()

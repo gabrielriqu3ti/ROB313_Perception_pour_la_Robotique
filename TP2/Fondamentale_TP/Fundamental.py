@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from matplotlib import pyplot as plt
+import math
 
 
 ###### Read images
@@ -12,9 +13,9 @@ img2 = cv2.imread('POP02.jpg',0) #trainimage # right image
 
 ###### Detect and match keypoints
 kaze = cv2.KAZE_create(upright = False,#Par défaut : false
-                      threshold = 0.001,#Par défaut : 0.001
+                      threshold = 0.003,#Par défaut : 0.001
                       nOctaves = 4,#Par défaut : 4
-                      nOctaveLayers = 4,#Par défaut : 4
+                      nOctaveLayers = 8,#Par défaut : 4
                       diffusivity = 2)#Par défaut : 2
 
 
@@ -25,6 +26,10 @@ kp2, des2 = kaze.detectAndCompute(img2,None)
 print('Nb of keypoints: ' + str(len(kp1)) + ' ' + str(len(kp2)))
 #imgd=img1
 #imgd = cv2.drawKeypoints(img1, kp1, imgd,-1,flags=4)
+#cv2.imshow('Keypoints', imgd)
+#cv2.waitKey(0)
+#imgd=img2
+#imgd = cv2.drawKeypoints(img2, kp2, imgd,-1,flags=4)
 #cv2.imshow('Keypoints', imgd)
 #cv2.waitKey(0)
 #cv2.destroyAllWindows()
@@ -53,7 +58,7 @@ pts2 = []
 
 # filter matching using threshold and ratio test as per Lowe's paper
 for i,(m,n) in enumerate(matches):
-    if (m.distance < 0.9) & (m.distance < 0.99*n.distance):
+    if (m.distance < 0.2) & (m.distance < 0.99*n.distance):
         pts2.append(kp2[m.trainIdx].pt)
         pts1.append(kp1[m.queryIdx].pt)
 
@@ -100,8 +105,8 @@ def drawFundamental(img1,img2,pts1,pts2,F):
     plt.figure(figsize=(15, 5))
     plt.subplot(121),plt.imshow(img5)
     plt.subplot(122),plt.imshow(img3)
-   
-   
+
+
 
 ###### Compute Fundamental Matrix using OpenCV RANSAC
 FRansac, mask = cv2.findFundamentalMat(pts1,pts2,cv2.FM_RANSAC)
@@ -111,15 +116,121 @@ print('Number of RANSAC inliers : ' + str(mask.sum()))
 inlierpts1 = pts1[mask.ravel()==1]
 inlierpts2 = pts2[mask.ravel()==1]
 
+def SampsonDist(pt1, pt2, F):
+    # Calculate the Simpson's distance of a pair of points (pt1, pt2) and a 
+    # Fundamental matrix F
+    Mpt1 = np.array([[inlierpt1[0], 0,0], [inlierpt1[1], 0,0], [1,0,0]])
+    Mpt2 = np.array([[inlierpt2[0], 0,0], [inlierpt2[1], 0,0], [1,0,0]])
+    num = np.transpose(Mpt1)  * FRansac * Mpt2
+    den1 = np.transpose(FRansac) * Mpt1
+    den2 = FRansac * Mpt2
+    SampDist = num[0,0]**2 / (den1[0,0]**2 + den1[1,0]**2 + den2[0,0]**2 + den2[1,0]**2)
+    return SampDist
+
+mse = 0
+for inlierpt1, inlierpt2 in zip(inlierpts1, inlierpts2):
+    mse += SampsonDist(inlierpt1, inlierpt2, FRansac)
+
+rmse = math.sqrt(mse / mask.sum())
+print(f"RMSE : {rmse}")
+
 # plot epipolar lines
 drawFundamental(img1,img2,inlierpts1,inlierpts2,FRansac)
 
-
-
-
 ###### Compute Fundamental Matrix using hand-made RANSAC
 
-# TODO
+### TODO
+
+def NSamples(sampleSize, propOutliers):
+    # Calculate the number of samples required to ensure, with probability 0.99,
+    # that at least one sample has no outliers for a given size of sample and 
+    # proportion of outliers in a RANSAC algorithm 
+    N_p0_99 = [[ 2, 3,  5,  6,  7,  11,   17],
+               [ 3, 4,  7,  9, 11,  19,   35],
+               [ 3, 5,  9, 13, 17,  34,   72],
+               [ 4, 6, 12, 17, 26,  57,  146],
+               [ 4, 7, 16, 24, 37,  97,  293],
+               [ 4, 8, 20, 33, 54, 163,  588],
+               [ 5, 9, 26, 44, 78, 272, 1177]]
+    if propOutliers < 0.05:
+        j = 0
+    elif propOutliers < 0.1:
+        j = 1
+    elif propOutliers < 0.2:
+        j = 2
+    elif propOutliers < 0.25:
+        j = 3
+    elif propOutliers < 0.3:
+        j = 4
+    elif propOutliers < 0.4:
+        j = 5
+    else:
+        j = 6
+    return N_p0_99[sampleSize-2][j]
+
+# RANSAC paramenters
+N = 588 # Initial number of samples for p = 0.99 and proportion of outliers e = 0.5
+maxDistThreshold = 1 # maximum distance of the solution from inliers
+
+inliersPts1MaxN = []
+inliersPts2MaxN = []
+NinMaxN = 0
+mseMin = 0
+FRANSAC = [[0,0,0],[0,0,0],[0,0,0]]
+
+i = 0
+while N > i:
+    # Compute Fundamental Matrix F with 7-points
+
+    indexes = np.random.randint(0, pts1.shape[0], size=(7))
+
+    samplePt1 = pts1[indexes,:]
+    samplePt2 = pts2[indexes,:]
+
+    F7point, _ = cv2.findFundamentalMat(samplePt1,samplePt2,cv2.FM_7POINT)
+
+    print(f"F7-point : {F7point}")
+
+    NInliers = list(range(len(F7point)//3))
+    NinMax = 0
+
+    # Choose Fundamental matrix F with more inliers in the case of having 3 solutions
+    for j in range(0,len(F7point)//3):
+        inliersPts1 = []
+        inliersPts2 = []
+        for pt1, pt2 in zip(pts1, pts2):
+            if SampsonDist(pt1, pt2, F7point[3*j:3*(j+1),:]) < maxDistThreshold:
+                inliersPts1.append(pt1)
+                inliersPts2.append(pt2)
+        NInliers[j] = len(inliersPts1)
+        if NInliers[j] > NinMax:
+            inliersPts1Max = inliersPts1
+            inliersPts2Max = inliersPts2
+            NinMax = NInliers[j]
+            F_id = j
+
+    inliersPts1Max = np.array(inliersPts1Max)
+    inliersPts2Max = np.array(inliersPts2Max)
+
+    # Update Fundamental matrix F, maximum number of inliers and inliers
+    if NinMax > NinMaxN:
+        NinMaxN = NinMax
+        inliersPts1MaxN = inliersPts1Max
+        inliersPts2MaxN = inliersPts2Max
+        FRANSAC = F7point[3*F_id:3*(F_id+1),:]
+        
+    # Adapt the number of samples N
+    propOutliers = 1 - (NinMaxN)/(pts1.shape[0])
+    N = NSamples(7, propOutliers)
+    i += 1
+
+    print(f"N = {N}")
+    print(f"i = {i}")
+    print(f"e = {propOutliers}")
+
+
+drawFundamental(img1, img2, inliersPts1MaxN, inliersPts2MaxN, FRANSAC)
+
 
 #drawFundamental(img1,img2,inliersPt1,inliersPt2,bestF)
 
