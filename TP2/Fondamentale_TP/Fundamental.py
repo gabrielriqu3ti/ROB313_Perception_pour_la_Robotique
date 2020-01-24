@@ -10,8 +10,6 @@ img2 = cv2.imread('POP02.jpg',0) #trainimage # right image
 #img1 = cv2.imread('DeathStar1.jpg',0)  #queryimage # left image
 #img2 = cv2.imread('DeathStar2.jpg',0) #trainimage # right image
 
-print(img1.shape)
-
 
 ###### Detect and match keypoints
 kaze = cv2.KAZE_create(upright = False,#Par défaut : false
@@ -28,7 +26,7 @@ kp2, des2 = kaze.detectAndCompute(img2,None)
 print('Nb of keypoints: ' + str(len(kp1)) + ' ' + str(len(kp2)))
 imgd=img1
 cv2.namedWindow('Keypoints', cv2.WINDOW_NORMAL)
-cv2.resizeWindow('Keypoints', img1.shape[0], img1.shape[1])
+cv2.resizeWindow('Keypoints', img1.shape[1], img1.shape[0])
 imgd = cv2.drawKeypoints(img1, kp1, imgd,-1,flags=4)
 cv2.imshow('Keypoints', imgd)
 cv2.waitKey(0)
@@ -42,7 +40,7 @@ cv2.destroyAllWindows()
 # match keypoints using FLANN library
 FLANN_INDEX_KDTREE = 0
 index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-search_params = dict(checks = 50)
+search_params = dict(checks = 100)
 
 flann = cv2.FlannBasedMatcher(index_params,search_params)
 matches = flann.knnMatch(des1,des2,k=2)
@@ -54,7 +52,7 @@ m_image = cv2.drawMatches(
     [match[0] for match in matches],
     m_image)
 cv2.namedWindow('Match', cv2.WINDOW_NORMAL)
-cv2.resizeWindow('Match', 2*img1.shape[0], img1.shape[1])
+cv2.resizeWindow('Match', img1.shape[1], img1.shape[0]//2)
 cv2.imshow('Match', m_image)
 cv2.waitKey(0)
 cv2.destroyAllWindows()
