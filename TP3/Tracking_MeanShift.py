@@ -20,10 +20,16 @@ def define_ROI(event, x, y, flags, param):
 		c = min(c,c2)  
 		roi_defined = True
 
-cap = cv2.VideoCapture('../Sequences/Antoine_Mug.mp4')
+#cap = cv2.VideoCapture('Test-Videos/Antoine_Mug.mp4')
+#cap = cv2.VideoCapture('Test-Videos/VOT-Ball.mp4')
+#cap = cv2.VideoCapture('Test-Videos/VOT-Basket.mp4')
+#cap = cv2.VideoCapture('Test-Videos/VOT-Car.mp4')
+#cap = cv2.VideoCapture('Test-Videos/VOT-Sunshade.mp4')
+cap = cv2.VideoCapture('Test-Videos/VOT-Woman.mp4')
 
 # take first frame of the video
 ret,frame = cap.read()
+
 # load the image, clone it, and setup the mouse callback function
 clone = frame.copy()
 cv2.namedWindow("First image")
@@ -46,6 +52,7 @@ while True:
 		break
  
 track_window = (r,c,h,w)
+
 # set up the ROI for tracking
 roi = frame[c:c+w, r:r+h]
 
@@ -72,9 +79,9 @@ while(1):
     ret ,frame = cap.read()
     if ret == True:
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-	# Backproject the model histogram roi_hist onto the 
-	# current image hsv, i.e. dst(x,y) = roi_hist(hsv(0,x,y))
-	
+        
+        # Backproject the model histogram roi_hist onto the 
+        # current image hsv, i.e. dst(x,y) = roi_hist(hsv(0,x,y))
         dst = cv2.calcBackProject([hsv],[0],roi_hist,[0,180],1)
 
         # apply meanshift to dst to get the new location
